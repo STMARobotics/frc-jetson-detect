@@ -83,6 +83,7 @@ while True:
     # Resize the image on the GPU to lower resolution for more efficient streaming
     smallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format=img.format)
     jetson.utils.cudaResize(img, smallImg)
+    del img
 
     # Convert color from rgb8 to bgr8 - CUDA uses rgb but OpenCV/CameraServer use bgr
     # Without this step, red and blue are inverted in the streamed image
@@ -99,3 +100,4 @@ while True:
 
     # Send the image to the CameraServer
     csSource.putFrame(numpyImg)
+    del numpyImg

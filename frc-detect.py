@@ -8,9 +8,18 @@ from networktables import NetworkTables
 MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-vid-1-26"
 MODEL_FILE_NAME = "ssd-mobilenet.onnx"
 
+# Detection confidence thresold in percent. Confidence less than this will not be returned
+CONFIDENCE_THRESHOLD = 0.5
+
+# Camera URL
+# '/dev/video1' for USB (use `v4l2-ctl --list-devices` to get list of USB cameras)
+CAMERA_URL = "/dev/video1"
+# 'csi://0' for CSI (PiCam)
+# CAMERA_URL = "csi://0"
+
 # Capture dimensions and rate
-CAP_HEIGHT = 640
-CAP_WIDTH = 480
+CAP_HEIGHT = 720
+CAP_WIDTH = 1280
 CAP_RATE = 60
 
 # CameraServer dimensions
@@ -25,23 +34,25 @@ csSource = cs.putVideo("Jetson", STREAM_WIDTH, STREAM_HEIGHT)
 # Configure the NetworkTables to send data to the robot and Driver Station
 # NetworkTables.initialize("192.168.1.214")
 NetworkTables.startClientTeam(7028)
-smartDashboard = NetworkTables.getTable('SmartDashboard')
+jetsonTable = NetworkTables.getTable('JetsonDetect')
 
 # Configure DetectNet for object detection
-detectNet = jetson.inference.detectNet(argv=[
-    "--model=" + MODEL_DIR + "/" + MODEL_FILE_NAME,
-    "--class_labels=" + MODEL_DIR + "/labels.txt",
-    "--input-blob=input_0",
-    "--output-cvg=scores",
-    "--output-bbox=boxes"],
-    threshold=0.5)
+detectNet = jetson.inference.detectNet(
+    argv=[
+        "--model=" + MODEL_DIR + "/" + MODEL_FILE_NAME,
+        "--class_labels=" + MODEL_DIR + "/labels.txt",
+        "--input-blob=input_0",
+        "--output-cvg=scores",
+        "--output-bbox=boxes"
+    ],
+    threshold=CONFIDENCE_THRESHOLD)
 
+# Load class labels from the model
 with open(MODEL_DIR + "/labels.txt") as file:
     labels = file.read().splitlines()
 
 # Configure the camera
-# '/dev/video1' for USB - 'csi://0' for CSI (PiCam)
-camera = jetson.utils.videoSource("csi://0", argv=[
+camera = jetson.utils.videoSource(CAMERA_URL, argv=[
     "--input-width=" + str(CAP_WIDTH),
     "--input-height=" + str(CAP_HEIGHT),
     "--input-rate=" + str(CAP_RATE)])
@@ -51,13 +62,11 @@ camera = jetson.utils.videoSource("csi://0", argv=[
 while True:
     # Capture image from the camera
     img = camera.Capture()
-    smartDashboard.putString("Capture Size", img.shape)
-    smartDashboard.putString("Capture Format", img.format)
 
     # Detect objects from the image
     detections = detectNet.Detect(img)
 
-    # Put detection info on the NetworkTables
+    # Put detection info on the NetworkTable
     ntDetections = []
     for detection in detections:
         ntDetections.append({
@@ -75,7 +84,8 @@ while True:
             "Width": detection.Width,
         })
 
-    smartDashboard.putString("Detections", json.dumps(ntDetections))
+    jetsonTable.putString("Detections", json.dumps(ntDetections))
+    jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())
 
     # display.Render(img)
     # display.SetStatus("Object Detection | Network {:.0f} FPS".format(net.GetNetworkFPS()))

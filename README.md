@@ -75,6 +75,22 @@ sudo apt update
 sudo apt install python3-cscore
 ```
 
+# NetworkTables
+The Jetson communicate with the robot and driver station through the NetworkTables. This is pretty simple, so just [look at the docs](https://robotpy.readthedocs.io/projects/pynetworktables/en/stable/api.html).
+
+```python
+from networktables import NetworkTables
+
+NetworkTables.initialize()
+sd = NetworkTables.getTable("SmartDashboard")
+sd.putNumber("MyNumber", 1234)
+```
+
+# CameraServer (CSCore)
+The CameraServer is for streaming video. This is used to stream images after to the driver station for debugging.
+
+There are two places to look for documentation, [RobotPy CameraServer docs](https://robotpy.readthedocs.io/projects/cscore/en/stable/api.html) and [WPILib CameraServer docs](https://docs.wpilib.org/en/stable/docs/software/vision-processing/introduction/cameraserver-class.html)
+
 # Misc
 ## Finding cameras
 Command to list cameras:

@@ -4,8 +4,14 @@ import json
 from cscore import CameraServer
 from networktables import NetworkTables
 
+# Parameters (probably should make these commandline args)
+# Whether or not to show a window on the desktop with detection images
+SHOW_DISPLAY = False
+# Set to None to connect NetworkTables to robot, set to an IP address to connect to a specific IP
+NT_IP = None #"192.168.1.214" 
+
 # Directory where the model is stored
-MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-vid-1-26"
+MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-28"
 MODEL_FILE_NAME = "ssd-mobilenet.onnx"
 
 # Detection confidence thresold in percent. Confidence less than this will not be returned
@@ -31,9 +37,12 @@ cs = CameraServer.getInstance()
 cs.enableLogging()
 csSource = cs.putVideo("Jetson", STREAM_WIDTH, STREAM_HEIGHT)
 
-# Configure the NetworkTables to send data to the robot and Driver Station
-# NetworkTables.initialize("192.168.1.214")
-NetworkTables.startClientTeam(7028)
+# Configure the NetworkTables to send data to the robot and shuffleboard
+if NT_IP is None:
+    NetworkTables.startClientTeam(7028)
+else:
+    NetworkTables.initialize(NT_IP)
+
 jetsonTable = NetworkTables.getTable('JetsonDetect')
 
 # Configure DetectNet for object detection
@@ -57,8 +66,13 @@ camera = jetson.utils.videoSource(CAMERA_URL, argv=[
     "--input-height=" + str(CAP_HEIGHT),
     "--input-rate=" + str(CAP_RATE)])
 
-# display = jetson.utils.videoOutput("display://0") # 'my_video.mp4' for file
+display = None
+if SHOW_DISPLAY:
+    display = jetson.utils.videoOutput("display://0")
 
+# Define variables to hold tranformed images for streaming
+smallImg = None
+bgrSmallImg = None
 while True:
     # Capture image from the camera
     img = camera.Capture()
@@ -87,19 +101,21 @@ while True:
     jetsonTable.putString("Detections", json.dumps(ntDetections))
     jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())
 
-    # display.Render(img)
-    # display.SetStatus("Object Detection | Network {:.0f} FPS".format(net.GetNetworkFPS()))
+    if display is not None:
+        display.Render(img)
+        display.SetStatus("Object Detection | Network {:.0f} FPS".format(detectNet.GetNetworkFPS()))
 
     # Resize the image on the GPU to lower resolution for more efficient streaming
-    smallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format=img.format)
+    if smallImg is None:
+        smallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format=img.format)
     jetson.utils.cudaResize(img, smallImg)
     del img
 
     # Convert color from rgb8 to bgr8 - CUDA uses rgb but OpenCV/CameraServer use bgr
     # Without this step, red and blue are inverted in the streamed image
-    bgrSmallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format="bgr8")
+    if bgrSmallImg is None:
+        bgrSmallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format="bgr8")
     jetson.utils.cudaConvertColor(smallImg, bgrSmallImg)
-    del smallImg
 
     # Synchronize so changes from GPU are available on CPU
     jetson.utils.cudaDeviceSynchronize()
@@ -111,3 +127,6 @@ while True:
     # Send the image to the CameraServer
     csSource.putFrame(numpyImg)
     del numpyImg
+
+del smallImg
+del bgrSmallImg

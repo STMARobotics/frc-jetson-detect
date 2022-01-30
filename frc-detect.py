@@ -1,6 +1,7 @@
 import jetson.inference
 import jetson.utils
 import json
+import time
 from cscore import CameraServer
 from networktables import NetworkTables
 
@@ -8,7 +9,7 @@ from networktables import NetworkTables
 # Whether or not to show a window on the desktop with detection images
 SHOW_DISPLAY = False
 # Set to None to connect NetworkTables to robot, set to an IP address to connect to a specific IP
-NT_IP = None #"192.168.1.214" 
+NT_IP = None #"192.168.1.214"
 
 # Directory where the model is stored
 MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-28"
@@ -65,6 +66,7 @@ camera = jetson.utils.videoSource(CAMERA_URL, argv=[
     "--input-width=" + str(CAP_WIDTH),
     "--input-height=" + str(CAP_HEIGHT),
     "--input-rate=" + str(CAP_RATE)])
+jetsonTable.putString("Camera FPS", camera.GetFrameRate())
 
 display = None
 if SHOW_DISPLAY:
@@ -73,6 +75,9 @@ if SHOW_DISPLAY:
 # Define variables to hold tranformed images for streaming
 smallImg = None
 bgrSmallImg = None
+startTime = time.time()
+lowestDetection = None
+lowestDetectionBottom = 0
 while True:
     # Capture image from the camera
     img = camera.Capture()
@@ -80,10 +85,16 @@ while True:
     # Detect objects from the image
     detections = detectNet.Detect(img)
 
+    endTime = time.time()
+    elapseTime = (endTime - startTime) * 1000
+    startTime = endTime
+    jetsonTable.putNumber("Latency", (endTime - startTime) * 1000)
+    jetsonTable.putNumber("Pipeline FPS", 1000 / elapseTime)
+
     # Put detection info on the NetworkTable
     ntDetections = []
     for detection in detections:
-        ntDetections.append({
+        ntDetection = {
             "Class": labels[detection.ClassID],
             "ClassID": detection.ClassID,
             "Instance": detection.Instance,
@@ -96,10 +107,19 @@ while True:
             "Right": detection.Right,
             "Top": detection.Top,
             "Width": detection.Width,
-        })
+            "Timestamp": time.time()
+        }
+        ntDetections.append(ntDetection)
+        if detection.Bottom > lowestDetectionBottom:
+            lowestDetection = ntDetection
+            lowestDetectionBottom = detection.Bottom
 
     jetsonTable.putString("Detections", json.dumps(ntDetections))
     jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())
+    if (lowestDetection is None):
+        jetsonTable.putString("Lowest Detection", lowestDetection)
+    else:
+        jetsonTable.putString("Lowest Detection", "")
 
     if display is not None:
         display.Render(img)

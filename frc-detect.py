@@ -2,6 +2,7 @@ import jetson.inference
 import jetson.utils
 import json
 import time
+import math
 from cscore import CameraServer
 from networktables import NetworkTables
 
@@ -9,7 +10,8 @@ from networktables import NetworkTables
 # Whether or not to show a window on the desktop with detection images
 SHOW_DISPLAY = False
 # Set to None to connect NetworkTables to robot, set to an IP address to connect to a specific IP
-NT_IP = None #"192.168.1.214"
+NT_IP = None
+# NT_IP = "192.168.1.214"
 
 # Directory where the model is stored
 MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-28"
@@ -29,7 +31,10 @@ CAP_HEIGHT = 720
 CAP_WIDTH = 1280
 CAP_RATE = 60
 
-# Crosshair location
+# Scale of current capture settings vs the baseline of 720p (used to scale things we draw on the image)
+CAP_SCALE = CAP_HEIGHT / 720
+
+# Crosshair location. This is the "origin" for targets - the location where we want targets to be.
 CROSSHAIR_X = CAP_WIDTH // 2
 CROSSHAIR_Y = CAP_HEIGHT
 
@@ -37,9 +42,12 @@ CROSSHAIR_Y = CAP_HEIGHT
 STREAM_HEIGHT = CAP_HEIGHT // 2
 STREAM_WIDTH = CAP_WIDTH // 2
 
-def drawCross(input, x, y, r, g, b, a, size, thickness):
-    jetson.utils.cudaDrawLine(img, (x, y - size // 2), (x, y + size // 2), (r, g, b, a), thickness)
-    jetson.utils.cudaDrawLine(img, (x - size // 2, y), (x + size // 2, y), (r, g, b, a), thickness)
+def drawCrossHairs(input, x, y, r, g, b, a, size, gapSize, thickness):
+    jetson.utils.cudaDrawLine(img, (x, y - size // 2), (x, y - gapSize // 2), (r, g, b, a), thickness)
+    jetson.utils.cudaDrawLine(img, (x, y + size // 2), (x, y + gapSize // 2), (r, g, b, a), thickness)
+
+    jetson.utils.cudaDrawLine(img, (x - size // 2, y), (x - gapSize // 2, y), (r, g, b, a), thickness)
+    jetson.utils.cudaDrawLine(img, (x + size // 2, y), (x + gapSize // 2, y), (r, g, b, a), thickness)
 
 
 # Configure the CameraServer to send images to the Driver Station
@@ -89,54 +97,64 @@ while True:
     # Capture image from the camera
     img = camera.Capture()
 
-    # Detect objects from the image. Have DetectNet overlay labels and confidence on image.
-    detections = detectNet.Detect(img, overlay='label,conf')
+    # Detect objects from the image. Have DetectNet overlay confidence on image.
+    detections = detectNet.Detect(img, overlay='conf')
 
-    lowestDetection = None
-    lowestDetectionBottom = 0
+    closestDetection = None
+    closestDetectionDistance = 10000
     # Put detection info on the NetworkTable
     ntDetections = []
     for detection in detections:
+        targetX = CROSSHAIR_X - detection.Center[0]
+        targetY = CROSSHAIR_Y - detection.Center[1]
+        targetDistance = math.sqrt(targetX**2 + targetY**2)
         ntDetection = {
             "Class": labels[detection.ClassID],
             "ClassID": detection.ClassID,
             "Instance": detection.Instance,
             "Area": detection.Area,
             "Bottom": detection.Bottom,
-            "Center": detection.Center,
+            "CenterX": detection.Center[0],
+            "CenterY": detection.Center[1],
             "Confidence": detection.Confidence,
             "Height": detection.Height,
             "Left": detection.Left,
             "Right": detection.Right,
             "Top": detection.Top,
             "Width": detection.Width,
-            "Timestamp": time.time()
+            "Timestamp": time.time(),
+            "TargetX": targetX,
+            "TargetY": targetY,
+            "TargetDistance": targetDistance
         }
-        ntDetections.append(ntDetection)
-        if detection.Bottom > lowestDetectionBottom:
-            lowestDetection = ntDetection
-            lowestDetectionBottom = detection.Bottom
-        
         # If we end up needing to sample the image for cargo color, we would do it here...
 
-        # Draw + in the center of the detection
-        drawCross(img, detection.Center[0], detection.Center[1], 255, 255, 255, 255, 30, 1)
-
+        ntDetections.append(ntDetection)
+        if targetDistance < closestDetectionDistance:
+            closestDetection = ntDetection
+            closestDetectionDistance = targetDistance
+        
         # Draw box over detection. We do this here instead of having DetectNet do it so we can color code.
         if labels[detection.ClassID] == "RedCargo":
             jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (255, 0, 0, 75))
         else:
             jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (0, 0, 255, 75))
     
-    # Draw crosshairs
-    drawCross(img, CROSSHAIR_X, CROSSHAIR_Y, 0, 255, 0, 255, 30, 1)
-
     jetsonTable.putString("Detections", json.dumps(ntDetections))
     jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())
-    if (lowestDetection is None):
-        jetsonTable.putString("Lowest Detection", "")
+    if (closestDetection is None):
+        jetsonTable.putString("Closest Detection", "")
     else:
-        jetsonTable.putString("Lowest Detection", lowestDetection)
+        jetsonTable.putString("Closest Detection", closestDetection)
+        # Draw + in the center of the detection
+        drawCrossHairs(img, closestDetection["CenterX"], closestDetection["CenterY"], 
+            255, 255, 255, 255,
+            30 * CAP_SCALE, 12 * CAP_SCALE, 3)
+
+    # Draw the origin crosshairs
+    drawCrossHairs(img, CROSSHAIR_X, CROSSHAIR_Y,
+        0, 255, 0, 255,
+        120 * CAP_SCALE, 30 * CAP_SCALE, 1)
 
     if display is not None:
         display.Render(img)

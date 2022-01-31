@@ -29,9 +29,18 @@ CAP_HEIGHT = 720
 CAP_WIDTH = 1280
 CAP_RATE = 60
 
+# Crosshair location
+CROSSHAIR_X = CAP_WIDTH // 2
+CROSSHAIR_Y = CAP_HEIGHT
+
 # CameraServer dimensions
-STREAM_HEIGHT = 180
-STREAM_WIDTH = 320
+STREAM_HEIGHT = CAP_HEIGHT // 2
+STREAM_WIDTH = CAP_WIDTH // 2
+
+def drawCross(input, x, y, r, g, b, a, size, thickness):
+    jetson.utils.cudaDrawLine(img, (x, y - size // 2), (x, y + size // 2), (r, g, b, a), thickness)
+    jetson.utils.cudaDrawLine(img, (x - size // 2, y), (x + size // 2, y), (r, g, b, a), thickness)
+
 
 # Configure the CameraServer to send images to the Driver Station
 cs = CameraServer.getInstance()
@@ -110,11 +119,17 @@ while True:
         
         # If we end up needing to sample the image for cargo color, we would do it here...
 
+        # Draw + in the center of the detection
+        drawCross(img, detection.Center[0], detection.Center[1], 255, 255, 255, 255, 30, 1)
+
         # Draw box over detection. We do this here instead of having DetectNet do it so we can color code.
         if labels[detection.ClassID] == "RedCargo":
             jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (255, 0, 0, 75))
         else:
             jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (0, 0, 255, 75))
+    
+    # Draw crosshairs
+    drawCross(img, CROSSHAIR_X, CROSSHAIR_Y, 0, 255, 0, 255, 30, 1)
 
     jetsonTable.putString("Detections", json.dumps(ntDetections))
     jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())

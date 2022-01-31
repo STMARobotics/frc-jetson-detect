@@ -105,7 +105,7 @@ while True:
     # Put detection info on the NetworkTable
     ntDetections = []
     for detection in detections:
-        targetX = CROSSHAIR_X - detection.Center[0]
+        targetX = detection.Center[0] - CROSSHAIR_X
         targetY = CROSSHAIR_Y - detection.Center[1]
         targetDistance = math.sqrt(targetX**2 + targetY**2)
         ntDetection = {

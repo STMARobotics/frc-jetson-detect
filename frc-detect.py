@@ -76,21 +76,15 @@ if SHOW_DISPLAY:
 smallImg = None
 bgrSmallImg = None
 startTime = time.time()
-lowestDetection = None
-lowestDetectionBottom = 0
 while True:
     # Capture image from the camera
     img = camera.Capture()
 
-    # Detect objects from the image
-    detections = detectNet.Detect(img)
+    # Detect objects from the image. Have DetectNet overlay labels and confidence on image.
+    detections = detectNet.Detect(img, overlay='label,conf')
 
-    endTime = time.time()
-    elapseTime = (endTime - startTime) * 1000
-    startTime = endTime
-    jetsonTable.putNumber("Latency", (endTime - startTime) * 1000)
-    jetsonTable.putNumber("Pipeline FPS", 1000 / elapseTime)
-
+    lowestDetection = None
+    lowestDetectionBottom = 0
     # Put detection info on the NetworkTable
     ntDetections = []
     for detection in detections:
@@ -113,13 +107,21 @@ while True:
         if detection.Bottom > lowestDetectionBottom:
             lowestDetection = ntDetection
             lowestDetectionBottom = detection.Bottom
+        
+        # If we end up needing to sample the image for cargo color, we would do it here...
+
+        # Draw box over detection. We do this here instead of having DetectNet do it so we can color code.
+        if labels[detection.ClassID] == "RedCargo":
+            jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (255, 0, 0, 75))
+        else:
+            jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (0, 0, 255, 75))
 
     jetsonTable.putString("Detections", json.dumps(ntDetections))
     jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())
     if (lowestDetection is None):
-        jetsonTable.putString("Lowest Detection", lowestDetection)
-    else:
         jetsonTable.putString("Lowest Detection", "")
+    else:
+        jetsonTable.putString("Lowest Detection", lowestDetection)
 
     if display is not None:
         display.Render(img)
@@ -147,6 +149,13 @@ while True:
     # Send the image to the CameraServer
     csSource.putFrame(numpyImg)
     del numpyImg
+
+    # Calculate timing statistics
+    endTime = time.time()
+    elapseTime = (endTime - startTime) * 1000
+    startTime = endTime
+    jetsonTable.putNumber("Latency", elapseTime)
+    jetsonTable.putNumber("Pipeline FPS", 1000 / elapseTime)
 
 del smallImg
 del bgrSmallImg

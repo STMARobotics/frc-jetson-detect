@@ -109,9 +109,9 @@ while True:
         targetY = CROSSHAIR_Y - detection.Center[1]
         targetDistance = math.sqrt(targetX**2 + targetY**2)
         ntDetection = {
-            "Class": labels[detection.ClassID],
+            "ClassLabel": labels[detection.ClassID],
             "ClassID": detection.ClassID,
-            "Instance": detection.Instance,
+            "InstanceID": detection.Instance,
             "Area": detection.Area,
             "Bottom": detection.Bottom,
             "CenterX": detection.Center[0],
@@ -145,7 +145,7 @@ while True:
     if (closestDetection is None):
         jetsonTable.putString("Closest Detection", "")
     else:
-        jetsonTable.putString("Closest Detection", closestDetection)
+        jetsonTable.putString("Closest Detection", json.dumps(closestDetection))
         # Draw + in the center of the detection
         drawCrossHairs(img, closestDetection["CenterX"], closestDetection["CenterY"], 
             255, 255, 255, 255,

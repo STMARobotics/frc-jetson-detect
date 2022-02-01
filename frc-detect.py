@@ -99,46 +99,47 @@ while True:
 
     # Detect objects from the image. Have DetectNet overlay confidence on image.
     detections = detectNet.Detect(img, overlay='conf')
-
+    cargoColor = jetsonTable.getString("cargoColor", "Both")
     closestDetection = None
     closestDetectionDistance = 10000
     # Put detection info on the NetworkTable
     ntDetections = []
     for detection in detections:
-        targetX = detection.Center[0] - CROSSHAIR_X
-        targetY = CROSSHAIR_Y - detection.Center[1]
-        targetDistance = math.sqrt(targetX**2 + targetY**2)
-        ntDetection = {
-            "ClassLabel": labels[detection.ClassID],
-            "ClassID": detection.ClassID,
-            "InstanceID": detection.Instance,
-            "Area": detection.Area,
-            "Bottom": detection.Bottom,
-            "CenterX": detection.Center[0],
-            "CenterY": detection.Center[1],
-            "Confidence": detection.Confidence,
-            "Height": detection.Height,
-            "Left": detection.Left,
-            "Right": detection.Right,
-            "Top": detection.Top,
-            "Width": detection.Width,
-            "Timestamp": time.time(),
-            "TargetX": targetX,
-            "TargetY": targetY,
-            "TargetDistance": targetDistance
-        }
-        # If we end up needing to sample the image for cargo color, we would do it here...
+        if labels[detection.ClassID] == cargoColor or cargoColor == "Both":
+            targetX = detection.Center[0] - CROSSHAIR_X
+            targetY = CROSSHAIR_Y - detection.Center[1]
+            targetDistance = math.sqrt(targetX**2 + targetY**2)
+            ntDetection = {
+                "ClassLabel": labels[detection.ClassID],
+                "ClassID": detection.ClassID,
+                "InstanceID": detection.Instance,
+                "Area": detection.Area,
+                "Bottom": detection.Bottom,
+                "CenterX": detection.Center[0],
+                "CenterY": detection.Center[1],
+                "Confidence": detection.Confidence,
+                "Height": detection.Height,
+                "Left": detection.Left,
+                "Right": detection.Right,
+                "Top": detection.Top,
+                "Width": detection.Width,
+                "Timestamp": time.time(),
+                "TargetX": targetX,
+                "TargetY": targetY,
+                "TargetDistance": targetDistance
+            }
+            # If we end up needing to sample the image for cargo color, we would do it here...
 
-        ntDetections.append(ntDetection)
-        if targetDistance < closestDetectionDistance:
-            closestDetection = ntDetection
-            closestDetectionDistance = targetDistance
-        
-        # Draw box over detection. We do this here instead of having DetectNet do it so we can color code.
-        if labels[detection.ClassID] == "RedCargo":
-            jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (255, 0, 0, 75))
-        else:
-            jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (0, 0, 255, 75))
+            ntDetections.append(ntDetection)
+            if targetDistance < closestDetectionDistance:
+                closestDetection = ntDetection
+                closestDetectionDistance = targetDistance
+            
+            # Draw box over detection. We do this here instead of having DetectNet do it so we can color code.
+            if labels[detection.ClassID] == "RedCargo":
+                jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (255, 0, 0, 75))
+            else:
+                jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (0, 0, 255, 75))
     
     jetsonTable.putString("Detections", json.dumps(ntDetections))
     jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())

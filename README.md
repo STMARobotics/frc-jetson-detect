@@ -67,13 +67,11 @@ pip install pynetworktables
 ```
 
 
-Install cscore. [See docs for details](https://software.opensuse.org/download.html?project=home%3Aauscompgeek%3Arobotpy&package=python3-cscore)
+Install cscore.
+Warning: If you follow the docs to install with `apt` you may get an old version. Using pip will build from source, so it takes a few minutes, but you'll get the latest version.
 ```
-sudo apt update && sudo apt install curl
-echo 'deb http://download.opensuse.org/repositories/home:/auscompgeek:/robotpy/Ubuntu_18.04_Ports/ /' | sudo tee /etc/apt/sources.list.d/home:auscompgeek:robotpy.list
-curl -fsSL https://download.opensuse.org/repositories/home:auscompgeek:robotpy/Ubuntu_18.04_Ports/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/home_auscompgeek_robotpy.gpg > /dev/null
-sudo apt update
-sudo apt install python3-cscore
+export CPPFLAGS=-I/usr/include/opencv4
+pip install robotpy-cscore
 ```
 
 # NetworkTables

@@ -14,7 +14,7 @@ NT_IP = None
 # NT_IP = "192.168.1.214"
 
 # Directory where the model is stored
-MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-28"
+MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-31"
 MODEL_FILE_NAME = "ssd-mobilenet.onnx"
 
 # Detection confidence thresold in percent. Confidence less than this will not be returned
@@ -26,10 +26,9 @@ CAMERA_URL = "/dev/video1"
 # 'csi://0' for CSI (PiCam)
 # CAMERA_URL = "csi://0"
 
-# Capture dimensions and rate
+# Capture dimensions and rate (use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes)
 CAP_HEIGHT = 720
 CAP_WIDTH = 1280
-CAP_RATE = 60
 
 # Scale of current capture settings vs the baseline of 720p (used to scale things we draw on the image)
 CAP_SCALE = CAP_HEIGHT / 720
@@ -81,8 +80,7 @@ with open(MODEL_DIR + "/labels.txt") as file:
 # Configure the camera
 camera = jetson.utils.videoSource(CAMERA_URL, argv=[
     "--input-width=" + str(CAP_WIDTH),
-    "--input-height=" + str(CAP_HEIGHT),
-    "--input-rate=" + str(CAP_RATE)])
+    "--input-height=" + str(CAP_HEIGHT)])
 jetsonTable.putString("Camera FPS", camera.GetFrameRate())
 
 display = None
@@ -169,28 +167,30 @@ while True:
         display.Render(img)
         display.SetStatus("Object Detection | Network {:.0f} FPS".format(detectNet.GetNetworkFPS()))
 
-    # Resize the image on the GPU to lower resolution for more efficient streaming
-    if smallImg is None:
-        smallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format=img.format)
-    jetson.utils.cudaResize(img, smallImg)
-    del img
+    # Stream to CameraServer, if anyone is watching
+    if csSource.isEnabled():
+        # Resize the image on the GPU to lower resolution for more efficient streaming
+        if smallImg is None:
+            smallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format=img.format)
+        jetson.utils.cudaResize(img, smallImg)
+        del img
 
-    # Convert color from rgb8 to bgr8 - CUDA uses rgb but OpenCV/CameraServer use bgr
-    # Without this step, red and blue are inverted in the streamed image
-    if bgrSmallImg is None:
-        bgrSmallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format="bgr8")
-    jetson.utils.cudaConvertColor(smallImg, bgrSmallImg)
+        # Convert color from rgb8 to bgr8 - CUDA uses rgb but OpenCV/CameraServer use bgr
+        # Without this step, red and blue are inverted in the streamed image
+        if bgrSmallImg is None:
+            bgrSmallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format="bgr8")
+        jetson.utils.cudaConvertColor(smallImg, bgrSmallImg)
 
-    # Synchronize so changes from GPU are available on CPU
-    jetson.utils.cudaDeviceSynchronize()
+        # Synchronize so changes from GPU are available on CPU
+        jetson.utils.cudaDeviceSynchronize()
 
-    # Convert to from CUDA to Numpy/OpenGL 
-    # https://github.com/dusty-nv/jetson-inference/blob/master/docs/aux-image.md#converting-to-numpy-arrays
-    numpyImg = jetson.utils.cudaToNumpy(bgrSmallImg, STREAM_WIDTH, STREAM_HEIGHT, 4)
+        # Convert to from CUDA to Numpy/OpenGL 
+        # https://github.com/dusty-nv/jetson-inference/blob/master/docs/aux-image.md#converting-to-numpy-arrays
+        numpyImg = jetson.utils.cudaToNumpy(bgrSmallImg, STREAM_WIDTH, STREAM_HEIGHT, 4)
 
-    # Send the image to the CameraServer
-    csSource.putFrame(numpyImg)
-    del numpyImg
+        # Send the image to the CameraServer
+        csSource.putFrame(numpyImg)
+        del numpyImg
 
     # Calculate timing statistics
     endTime = time.time()

@@ -92,6 +92,7 @@ if SHOW_DISPLAY:
 # Define variables to hold tranformed images for streaming
 smallImg = None
 bgrSmallImg = None
+
 startTime = time.time()
 while True:
     # Capture image from the camera
@@ -99,16 +100,21 @@ while True:
 
     # Detect objects from the image. Have DetectNet overlay confidence on image.
     detections = detectNet.Detect(img, overlay='conf')
+
     cargoColor = jetsonTable.getString("cargoColor", "Both")
     closestDetection = None
     closestDetectionDistance = 10000
-    # Put detection info on the NetworkTable
+    # Loop over detected objects
     ntDetections = []
     for detection in detections:
+        # Filter based on selected color - RedCargo, BlueCargo, or Both
         if labels[detection.ClassID] == cargoColor or cargoColor == "Both":
+            # Calculate the target's distance from the crosshairs
             targetX = detection.Center[0] - CROSSHAIR_X
             targetY = CROSSHAIR_Y - detection.Center[1]
             targetDistance = math.sqrt(targetX**2 + targetY**2)
+
+            # Create object we can serialize to the network table.
             ntDetection = {
                 "ClassLabel": labels[detection.ClassID],
                 "ClassID": detection.ClassID,
@@ -128,14 +134,14 @@ while True:
                 "TargetY": targetY,
                 "TargetDistance": targetDistance
             }
-            # If we end up needing to sample the image for cargo color, we would do it here...
-
             ntDetections.append(ntDetection)
+            
+            # Check if this is the closest object encountered so far
             if targetDistance < closestDetectionDistance:
                 closestDetection = ntDetection
                 closestDetectionDistance = targetDistance
             
-            # Draw box over detection. We do this here instead of having DetectNet do it so we can color code.
+            # Draw box over detection. We do this here instead of having DetectNet do it so we can choose the colors.
             if labels[detection.ClassID] == "RedCargo":
                 jetson.utils.cudaDrawRect(img, (detection.Left, detection.Top, detection.Right, detection.Bottom), (255, 0, 0, 75))
             else:
@@ -143,6 +149,7 @@ while True:
     
     jetsonTable.putString("Detections", json.dumps(ntDetections))
     jetsonTable.putNumber("Network FPS", detectNet.GetNetworkFPS())
+
     if (closestDetection is None):
         jetsonTable.putString("Closest Detection", "")
     else:
@@ -158,6 +165,7 @@ while True:
         120 * CAP_SCALE, 30 * CAP_SCALE, 1)
 
     if display is not None:
+        # Update the the desktop window
         display.Render(img)
         display.SetStatus("Object Detection | Network {:.0f} FPS".format(detectNet.GetNetworkFPS()))
 

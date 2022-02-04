@@ -3,43 +3,9 @@ import jetson.utils
 import json
 import time
 import math
+import argparse
 from cscore import CameraServer
 from networktables import NetworkTables
-
-# Parameters (probably should make these commandline args)
-# Whether or not to show a window on the desktop with detection images
-SHOW_DISPLAY = False
-# Set to None to connect NetworkTables to robot, set to an IP address to connect to a specific IP
-NT_IP = None
-# NT_IP = "192.168.1.214"
-
-# Directory where the model is stored
-MODEL_DIR = "/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-31"
-MODEL_FILE_NAME = "ssd-mobilenet.onnx"
-
-# Detection confidence thresold in percent. Confidence less than this will not be returned
-CONFIDENCE_THRESHOLD = 0.5
-
-# Camera URL
-# '/dev/video1' for USB (use `v4l2-ctl --list-devices` to get list of USB cameras)
-CAMERA_URL = "/dev/video1"
-# 'csi://0' for CSI (PiCam)
-# CAMERA_URL = "csi://0"
-
-# Capture dimensions and rate (use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes)
-CAP_HEIGHT = 720
-CAP_WIDTH = 1280
-
-# Scale of current capture settings vs the baseline of 720p (used to scale things we draw on the image)
-CAP_SCALE = CAP_HEIGHT / 720
-
-# Crosshair location. This is the "origin" for targets - the location where we want targets to be.
-CROSSHAIR_X = CAP_WIDTH // 2
-CROSSHAIR_Y = CAP_HEIGHT
-
-# CameraServer dimensions
-STREAM_HEIGHT = CAP_HEIGHT // 2
-STREAM_WIDTH = CAP_WIDTH // 2
 
 def drawCrossHairs(input, x, y, r, g, b, a, size, gapSize, thickness):
     jetson.utils.cudaDrawLine(img, (x, y - size // 2), (x, y - gapSize // 2), (r, g, b, a), thickness)
@@ -49,42 +15,80 @@ def drawCrossHairs(input, x, y, r, g, b, a, size, gapSize, thickness):
     jetson.utils.cudaDrawLine(img, (x + size // 2, y), (x + gapSize // 2, y), (r, g, b, a), thickness)
 
 
+parser = argparse.ArgumentParser(description='FRC Object Detection')
+parser = argparse.ArgumentParser(description='FRC Object Detection')
+# Common arguments
+parser.add_argument('--model-dir', default="/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-31",
+                    help='The model directory')
+parser.add_argument('--model-file', default="ssd-mobilenet.onnx",
+                    help='The name of the model file')
+parser.add_argument('--threshold', type=float, default=0.5,
+                    help='The confidence threshold. Detections with confidence below the threshold are excluded.')
+parser.add_argument('--team', '-t', type=int, default=7028,
+                    help='Team number of robot to connect to. Not used when --ntip is specified.')
+
+# Less common arguments
+parser.add_argument('--ntip', '-ip',
+                    help='IP Address of the NetworkTables to connect to. Leave blank to connect to robot.')
+parser.add_argument('--display', '-d', action='store_true',
+                    help='Show a window on the desktop with detection result. Default: False.')
+parser.add_argument('--camera-url', default="/dev/video1",
+                    help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
+parser.add_argument('--capture-height', default=720,
+                    help='The resolution height to capture images from the camera. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')
+parser.add_argument('--capture-width', default=1280,
+                    help='The resolution width to capture images from the camera.')
+parser.add_argument('--stream-height', default=360,
+                    help='The resolution to stream to the CameraServer.')
+parser.add_argument('--stream-width', default=640,
+                    help='The resolution to stream to the CameraServer.')
+
+args = parser.parse_args()
+print(args)
+
+# Scale of current capture settings vs the baseline of 720p (used to scale things we draw on the image)
+captureScale = args.capture_height / 720
+
+# Crosshair location. This is the "origin" for targets - the location where we want targets to be.
+crosshairX = args.capture_width // 2
+crosshairY = args.capture_height
+
 # Configure the CameraServer to send images to the Driver Station
 cs = CameraServer.getInstance()
 cs.enableLogging()
-csSource = cs.putVideo("Jetson", STREAM_WIDTH, STREAM_HEIGHT)
+csSource = cs.putVideo("Jetson", args.stream_width, args.stream_height)
 
 # Configure the NetworkTables to send data to the robot and shuffleboard
-if NT_IP is None:
-    NetworkTables.startClientTeam(7028)
+if args.ntip is None:
+    NetworkTables.startClientTeam(args.team)
 else:
-    NetworkTables.initialize(NT_IP)
+    NetworkTables.initialize(args.ntip)
 
 jetsonTable = NetworkTables.getTable('JetsonDetect')
 
 # Configure DetectNet for object detection
 detectNet = jetson.inference.detectNet(
     argv=[
-        "--model=" + MODEL_DIR + "/" + MODEL_FILE_NAME,
-        "--class_labels=" + MODEL_DIR + "/labels.txt",
+        "--model=" + args.model_dir + "/" + args.model_file,
+        "--class_labels=" + args.model_dir + "/labels.txt",
         "--input-blob=input_0",
         "--output-cvg=scores",
         "--output-bbox=boxes"
     ],
-    threshold=CONFIDENCE_THRESHOLD)
+    threshold=args.threshold)
 
 # Load class labels from the model
-with open(MODEL_DIR + "/labels.txt") as file:
+with open(args.model_dir + "/labels.txt") as file:
     labels = file.read().splitlines()
 
 # Configure the camera
-camera = jetson.utils.videoSource(CAMERA_URL, argv=[
-    "--input-width=" + str(CAP_WIDTH),
-    "--input-height=" + str(CAP_HEIGHT)])
+camera = jetson.utils.videoSource(args.camera_url, argv=[
+    "--input-width=" + str(args.capture_width),
+    "--input-height=" + str(args.capture_height)])
 jetsonTable.putString("Camera FPS", camera.GetFrameRate())
 
 display = None
-if SHOW_DISPLAY:
+if args.display:
     display = jetson.utils.videoOutput("display://0")
 
 # Define variables to hold tranformed images for streaming
@@ -108,8 +112,8 @@ while True:
         # Filter based on selected color - RedCargo, BlueCargo, or Both
         if labels[detection.ClassID] == cargoColor or cargoColor == "Both":
             # Calculate the target's distance from the crosshairs
-            targetX = detection.Center[0] - CROSSHAIR_X
-            targetY = CROSSHAIR_Y - detection.Center[1]
+            targetX = detection.Center[0] - crosshairX
+            targetY = crosshairY - detection.Center[1]
             targetDistance = math.sqrt(targetX**2 + targetY**2)
 
             # Create object we can serialize to the network table.
@@ -155,12 +159,12 @@ while True:
         # Draw + in the center of the detection
         drawCrossHairs(img, closestDetection["CenterX"], closestDetection["CenterY"], 
             255, 255, 255, 255,
-            30 * CAP_SCALE, 12 * CAP_SCALE, 3)
+            30 * captureScale, 12 * captureScale, 3)
 
     # Draw the origin crosshairs
-    drawCrossHairs(img, CROSSHAIR_X, CROSSHAIR_Y,
+    drawCrossHairs(img, crosshairX, crosshairY,
         0, 255, 0, 255,
-        120 * CAP_SCALE, 30 * CAP_SCALE, 1)
+        120 * captureScale, 30 * captureScale, 1)
 
     if display is not None:
         # Update the the desktop window
@@ -171,14 +175,14 @@ while True:
     if csSource.isEnabled():
         # Resize the image on the GPU to lower resolution for more efficient streaming
         if smallImg is None:
-            smallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format=img.format)
+            smallImg = jetson.utils.cudaAllocMapped(width=args.stream_width, height=args.stream_height, format=img.format)
         jetson.utils.cudaResize(img, smallImg)
         del img
 
         # Convert color from rgb8 to bgr8 - CUDA uses rgb but OpenCV/CameraServer use bgr
         # Without this step, red and blue are inverted in the streamed image
         if bgrSmallImg is None:
-            bgrSmallImg = jetson.utils.cudaAllocMapped(width=STREAM_WIDTH, height=STREAM_HEIGHT, format="bgr8")
+            bgrSmallImg = jetson.utils.cudaAllocMapped(width=args.stream_width, height=args.stream_height, format="bgr8")
         jetson.utils.cudaConvertColor(smallImg, bgrSmallImg)
 
         # Synchronize so changes from GPU are available on CPU
@@ -186,7 +190,7 @@ while True:
 
         # Convert to from CUDA to Numpy/OpenGL 
         # https://github.com/dusty-nv/jetson-inference/blob/master/docs/aux-image.md#converting-to-numpy-arrays
-        numpyImg = jetson.utils.cudaToNumpy(bgrSmallImg, STREAM_WIDTH, STREAM_HEIGHT, 4)
+        numpyImg = jetson.utils.cudaToNumpy(bgrSmallImg, args.stream_width, args.stream_height, 4)
 
         # Send the image to the CameraServer
         csSource.putFrame(numpyImg)

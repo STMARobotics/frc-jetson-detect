@@ -14,7 +14,7 @@ def drawCrossHairs(input, x, y, r, g, b, a, size, gapSize, thickness):
     jetson.utils.cudaDrawLine(img, (x - size // 2, y), (x - gapSize // 2, y), (r, g, b, a), thickness)
     jetson.utils.cudaDrawLine(img, (x + size // 2, y), (x + gapSize // 2, y), (r, g, b, a), thickness)
 
-
+#tweber - why is this here twice?
 parser = argparse.ArgumentParser(description='FRC Object Detection')
 parser = argparse.ArgumentParser(description='FRC Object Detection')
 # Common arguments
@@ -97,6 +97,12 @@ bgrSmallImg = None
 
 startTime = time.time()
 while True:
+    if jetsonTable.getBoolean("Enabled") != True:
+        jetsonTable.putString("Status", "Sleeping")
+        time.sleep(.02)
+        continue
+
+    jetsonTable.putString("Status", "Processing")
     # Capture image from the camera
     img = camera.Capture()
 

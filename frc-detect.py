@@ -92,8 +92,11 @@ if args.display:
 # Define variables to hold tranformed images for streaming
 smallImg = None
 bgrSmallImg = None
+videoImg = None
 
 startTime = time.time()
+video = jetson.utils.videoOutput(f"output-{time.time()}.mp4")
+frame = 0
 while True:
     if not csSource.isEnabled() and not jetsonTable.getBoolean("Enabled", True):
         jetsonTable.putString("Status", "Sleeping")
@@ -103,6 +106,12 @@ while True:
     jetsonTable.putString("Status", "Processing")
     # Capture image from the camera
     img = camera.Capture()
+    frame += 1
+    if frame % 20 == 0:
+        if videoImg is None:
+            videoImg = jetson.utils.cudaAllocMapped(width=args.stream_width, height=args.stream_height, format=img.format)
+        jetson.utils.cudaResize(img, videoImg)
+        video.Render(videoImg)
 
     # Detect objects from the image. Have DetectNet overlay confidence on image.
     detections = detectNet.Detect(img, overlay='conf')

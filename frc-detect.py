@@ -95,7 +95,7 @@ bgrSmallImg = None
 
 startTime = time.time()
 while True:
-    if jetsonTable.getBoolean("Enabled") != True:
+    if not jetsonTable.getBoolean("Enabled", True):
         jetsonTable.putString("Status", "Sleeping")
         time.sleep(.02)
         continue

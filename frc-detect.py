@@ -14,8 +14,6 @@ def drawCrossHairs(input, x, y, r, g, b, a, size, gapSize, thickness):
     jetson.utils.cudaDrawLine(img, (x - size // 2, y), (x - gapSize // 2, y), (r, g, b, a), thickness)
     jetson.utils.cudaDrawLine(img, (x + size // 2, y), (x + gapSize // 2, y), (r, g, b, a), thickness)
 
-#tweber - why is this here twice?
-parser = argparse.ArgumentParser(description='FRC Object Detection')
 parser = argparse.ArgumentParser(description='FRC Object Detection')
 # Common arguments
 parser.add_argument('--model-dir', default="/home/robotics/jetson-inference/python/training/detection/ssd/models/7028-all-1-31",

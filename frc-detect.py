@@ -95,7 +95,7 @@ bgrSmallImg = None
 
 startTime = time.time()
 while True:
-    if not jetsonTable.getBoolean("Enabled", True):
+    if not csSource.isEnabled() and not jetsonTable.getBoolean("Enabled", True):
         jetsonTable.putString("Status", "Sleeping")
         time.sleep(.02)
         continue
@@ -107,7 +107,7 @@ while True:
     # Detect objects from the image. Have DetectNet overlay confidence on image.
     detections = detectNet.Detect(img, overlay='conf')
 
-    cargoColor = jetsonTable.getString("cargoColor", "Both")
+    cargoColor = jetsonTable.getString("CargoColor", "Both")
     closestDetection = None
     closestDetectionDistance = 10000
     # Loop over detected objects

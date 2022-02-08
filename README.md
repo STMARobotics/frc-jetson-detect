@@ -100,3 +100,57 @@ NOTE: This command requires v4l-utils. If it is not installed, run this command:
 ```
 sudo apt install v4l-utils
 ```
+
+### Scheduling at startup
+Schedule this project to run on startup with systemd.
+
+Create a file with the below contents in the folder `/etc/systemd/system`.
+
+```bash
+sudo nano /etc/systemd/system/frc-detect.service
+```
+
+Add contents like this to the file and save:
+```
+[Unit]
+Description=FRC Object Detection
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+[Service]
+Restart=on-failure
+RestartSec=1s
+User=robotics
+Type=simple
+WorkingDirectory=/home/robotics/frc-jetson-detect
+ExecStart=/usr/bin/python3 /home/robotics/frc-jetson-detect/frc-detect.py
+[Install]
+WantedBy=multi-user.target
+```
+
+Start the service and then check that it starts up with these comands:
+```bash
+sudo systemctl start frc-detect
+journalctl -f -u frc-detect
+```
+
+If the service was successful, enable it so it will start automatically when the computer boots up:
+```bash
+sudo systemctl enable frc-detect.service
+```
+
+### Running headless
+Like a Raspberry Pi, you can configure the Jetson to boot to the command-line instead of loading the window manager and
+desktop. This will reduce resource utilization, especially memory.
+
+```bash
+sudo init 3     # stop the desktop
+sudo init 5     # restart the desktop
+```
+
+If you wish to make this persistent across reboots, you can use the follow commands to change the boot-up behavior:
+
+```bash
+sudo systemctl set-default multi-user.target     # disable desktop on boot
+sudo systemctl set-default graphical.target      # enable desktop on boot
+```
+Then after you reboot, the desktop will remain disabled or enabled (whichever default you set).

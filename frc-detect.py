@@ -30,15 +30,15 @@ parser.add_argument('--ntip', '-ip',
                     help='IP Address of the NetworkTables to connect to. Leave blank to connect to robot.')
 parser.add_argument('--display', '-d', action='store_true',
                     help='Show a window on the desktop with detection result. Default: False.')
-parser.add_argument('--camera-url', default="/dev/video1",
+parser.add_argument('--camera-url', '-c', default="/dev/video0",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
 parser.add_argument('--capture-height', default=720,
                     help='The resolution height to capture images from the camera. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')
 parser.add_argument('--capture-width', default=1280,
                     help='The resolution width to capture images from the camera.')
-parser.add_argument('--stream-height', default=360,
+parser.add_argument('--stream-height', default=160,
                     help='The resolution to stream to the CameraServer.')
-parser.add_argument('--stream-width', default=640,
+parser.add_argument('--stream-width', default=320,
                     help='The resolution to stream to the CameraServer.')
 
 args = parser.parse_args()

@@ -40,6 +40,12 @@ parser.add_argument('--stream-height', default=360,
                     help='The resolution to stream to the CameraServer.')
 parser.add_argument('--stream-width', default=640,
                     help='The resolution to stream to the CameraServer.')
+parser.add_argument('--record-folder', default=".",
+                    help='Folder where recorded video is stored.')
+parser.add_argument('--record-height', default=360,
+                    help='The resolution to record frames.')
+parser.add_argument('--record-width', default=640,
+                    help='The resolution to record frames.')
 
 args = parser.parse_args()
 print(args)
@@ -92,11 +98,13 @@ if args.display:
 # Define variables to hold tranformed images for streaming
 smallImg = None
 bgrSmallImg = None
-videoImg = None
+
+# Define variables used for record video
+recordFrameNum = -1
+recordImg = None
+recordVideo = None
 
 startTime = time.time()
-video = jetson.utils.videoOutput(f"output-{time.time()}.mp4")
-frame = 0
 while True:
     if not csSource.isEnabled() and not jetsonTable.getBoolean("Enabled", True):
         jetsonTable.putString("Status", "Sleeping")
@@ -106,12 +114,23 @@ while True:
     jetsonTable.putString("Status", "Processing")
     # Capture image from the camera
     img = camera.Capture()
-    frame += 1
-    if frame % 20 == 0:
-        if videoImg is None:
-            videoImg = jetson.utils.cudaAllocMapped(width=args.stream_width, height=args.stream_height, format=img.format)
-        jetson.utils.cudaResize(img, videoImg)
-        video.Render(videoImg)
+
+    # If "Record" entry is set, save every 20th frame to a video file
+    if jetsonTable.getBoolean("Record", False):
+        recordFrameNum += 1
+        if recordFrameNum % 20 == 0:
+            if recordVideo is None:
+                recordVideo = jetson.utils.videoOutput(f"{args.record_folder}/output-{time.time()}.mp4", argv=["--headless"])
+            if recordImg is None:
+                recordImg = jetson.utils.cudaAllocMapped(width=args.record_width, height=args.record_height, format=img.format)
+            jetson.utils.cudaResize(img, recordImg)
+            recordVideo.Render(recordImg)
+            recordFrameNum = -1
+    else:
+        # Clear the variables so a new file is created every time recording is enabled
+        recordVideo = None
+        recordImg = None
+        recordFrameNum = -1
 
     # Detect objects from the image. Have DetectNet overlay confidence on image.
     detections = detectNet.Detect(img, overlay='conf')

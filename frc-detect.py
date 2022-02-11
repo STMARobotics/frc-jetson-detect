@@ -118,14 +118,16 @@ while True:
     # If "Record" entry is set, save every 20th frame to a video file
     if jetsonTable.getBoolean("Record", False):
         recordFrameNum += 1
-        if recordFrameNum % 20 == 0:
+        recordInterval = jetsonTable.getNumber("Record Interval", 20)
+        if (recordInterval < 1): recordInterval = 1
+        if recordFrameNum % recordInterval == 0:
             if recordVideo is None:
                 recordVideo = jetson.utils.videoOutput(f"{args.record_folder}/output-{time.time()}.mp4", argv=["--headless"])
             if recordImg is None:
                 recordImg = jetson.utils.cudaAllocMapped(width=args.record_width, height=args.record_height, format=img.format)
             jetson.utils.cudaResize(img, recordImg)
             recordVideo.Render(recordImg)
-            recordFrameNum = -1
+            recordFrameNum = 0
     else:
         # Clear the variables so a new file is created every time recording is enabled
         recordVideo = None

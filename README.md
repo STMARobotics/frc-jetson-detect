@@ -122,7 +122,7 @@ RestartSec=1s
 User=robotics
 Type=simple
 WorkingDirectory=/home/robotics/frc-jetson-detect
-ExecStart=/usr/bin/python3 /home/robotics/frc-jetson-detect/frc-detect.py
+ExecStart=/usr/bin/python3 /home/robotics/frc-jetson-detect/frc-detect.py --record-folder /media/robotics/Robotics-USB
 [Install]
 WantedBy=multi-user.target
 ```
@@ -137,6 +137,14 @@ If the service was successful, enable it so it will start automatically when the
 ```bash
 sudo systemctl enable frc-detect.service
 ```
+
+### Recording to USB
+When a USB drive is inserted it will mount to /media/robotics/<VolumeName>. You can pass this path with the 
+`--record-folder` parameter. We named our USB drives `Robotics-USB` so you will see in the service above we pass
+`--record-folder /media/robotics/Robotics-USB`.
+
+WARNING: Be sure to eject the USB drive or power down or your data most likely will not be saved. Use `mount` to find
+the device, it will be something like `/dev/sda1`. Then run `sudo eject /dev/<DeviceID>`.
 
 ### Running headless
 Like a Raspberry Pi, you can configure the Jetson to boot to the command-line instead of loading the window manager and

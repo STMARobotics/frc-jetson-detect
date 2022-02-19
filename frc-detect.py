@@ -1,3 +1,4 @@
+import os
 import jetson.inference
 import jetson.utils
 import json
@@ -6,6 +7,7 @@ import math
 import argparse
 from cscore import CameraServer
 from networktables import NetworkTables
+import sh
 
 def drawCrossHairs(input, x, y, r, g, b, a, size, gapSize, thickness):
     jetson.utils.cudaDrawLine(img, (x, y - size // 2), (x, y - gapSize // 2), (r, g, b, a), thickness)
@@ -121,19 +123,34 @@ while True:
         recordInterval = jetsonTable.getNumber("Record Interval", 20)
         if (recordInterval < 1): recordInterval = 1
         if recordFrameNum % recordInterval == 0:
-            if recordVideo is None:
-                recordVideo = jetson.utils.videoOutput(f"{args.record_folder}/output-{time.time()}.mp4", argv=["--headless"])
-            if recordImg is None:
-                recordImg = jetson.utils.cudaAllocMapped(width=args.record_width, height=args.record_height, format=img.format)
-            jetson.utils.cudaResize(img, recordImg)
-            recordVideo.Render(recordImg)
-            recordFrameNum = 0
+            try:
+                #if the folder doesn't exist and isn't a mount point already then mount it
+                if not os.path.exists(args.record_folder) and not os.path.ismount(args.record_folder):
+                    sh.mount("/dev/7028usb/", args.record_folder, "-t ext4")
+
+                if recordVideo is None:
+                    recordVideo = jetson.utils.videoOutput(f"{args.record_folder}/output-{time.time()}.mp4", argv=["--headless"])
+                if recordImg is None:
+                    recordImg = jetson.utils.cudaAllocMapped(width=args.record_width, height=args.record_height, format=img.format)
+                jetson.utils.cudaResize(img, recordImg)
+                recordVideo.Render(recordImg)
+                recordFrameNum = 0
+            except:
+                print("An exception occurred recording video")
     else:
         # Clear the variables so a new file is created every time recording is enabled
         recordVideo = None
         recordImg = None
         recordFrameNum = -1
 
+        try:
+            #examples for sh here - https://python.hotexamples.com/examples/sh/-/umount/python-umount-function-examples.html
+            if (os.path.ismount(args.record_folder)):
+                sh.sync()
+                sh.unmount(args.record_folder)
+        except:
+            print("An exception occurred unmounting USB drive")
+    
     # Detect objects from the image. Have DetectNet overlay confidence on image.
     detections = detectNet.Detect(img, overlay='conf')
 

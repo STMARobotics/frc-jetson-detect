@@ -126,7 +126,7 @@ while True:
             try:
                 #if the folder doesn't exist and isn't a mount point already then mount it
                 if not os.path.exists(args.record_folder) and not os.path.ismount(args.record_folder):
-                    sh.mount("/dev/7028usb/", args.record_folder, "-t ext4")
+                    sh.mount("/sda/sda1/", "/media/robotics/", "-t ext4")
 
                 if recordVideo is None:
                     recordVideo = jetson.utils.videoOutput(f"{args.record_folder}/output-{time.time()}.mp4", argv=["--headless"])
@@ -145,9 +145,9 @@ while True:
 
         try:
             #examples for sh here - https://python.hotexamples.com/examples/sh/-/umount/python-umount-function-examples.html
-            if (os.path.ismount(args.record_folder)):
+            if (os.path.ismount("/media/robotics/")):
                 sh.sync()
-                sh.unmount(args.record_folder)
+                sh.unmount("/media/robotics")
         except:
             print("An exception occurred unmounting USB drive")
     

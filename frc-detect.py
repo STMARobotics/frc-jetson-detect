@@ -4,6 +4,7 @@ import json
 import time
 import math
 import argparse
+import cscore
 from cscore import CameraServer
 from networktables import NetworkTables
 
@@ -32,19 +33,21 @@ parser.add_argument('--display', '-d', action='store_true',
                     help='Show a window on the desktop with detection result. Default: False.')
 parser.add_argument('--camera-url', '-c', default="/dev/video0",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
-parser.add_argument('--capture-height', default=720,
+parser.add_argument('--capture-height', type=int, default=720,
                     help='The resolution height to capture images from the camera. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')
-parser.add_argument('--capture-width', default=1280,
+parser.add_argument('--capture-width', type=int, default=1280,
                     help='The resolution width to capture images from the camera.')
-parser.add_argument('--stream-height', default=160,
+parser.add_argument('--stream-height', type=int, default=320,
                     help='The resolution to stream to the CameraServer.')
-parser.add_argument('--stream-width', default=320,
+parser.add_argument('--stream-width', type=int, default=640,
                     help='The resolution to stream to the CameraServer.')
+parser.add_argument('--stream-compression', type=int, default=25,
+                    help='The compression to stream for clients that do not specify it.')
 parser.add_argument('--record-folder', default=".",
                     help='Folder where recorded video is stored.')
-parser.add_argument('--record-height', default=360,
+parser.add_argument('--record-height', type=int, default=360,
                     help='The resolution to record frames.')
-parser.add_argument('--record-width', default=640,
+parser.add_argument('--record-width', type=int, default=640,
                     help='The resolution to record frames.')
 
 args = parser.parse_args()
@@ -60,7 +63,9 @@ crosshairY = args.capture_height
 # Configure the CameraServer to send images to the Driver Station
 cs = CameraServer.getInstance()
 cs.enableLogging()
-csSource = cs.putVideo("Jetson", args.stream_width, args.stream_height)
+csSource = cscore.CvSource("Jetson", cscore.VideoMode.PixelFormat.kMJPEG, args.stream_width, args.stream_height, 24)
+server = cs.startAutomaticCapture(camera=csSource, return_server=True)
+server.setCompression(args.stream_compression)
 
 # Configure the NetworkTables to send data to the robot and shuffleboard
 if args.ntip is None:

@@ -2,6 +2,7 @@ import jetson.inference
 import jetson.utils
 import json
 import time
+import datetime
 import math
 import argparse
 import cscore
@@ -37,15 +38,15 @@ parser.add_argument('--capture-height', type=int, default=720,
                     help='The resolution height to capture images from the camera. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')
 parser.add_argument('--capture-width', type=int, default=1280,
                     help='The resolution width to capture images from the camera.')
-parser.add_argument('--stream-height', type=int, default=160,
+parser.add_argument('--stream-height', type=int, default=180,
                     help='The resolution to stream to the CameraServer.')
 parser.add_argument('--stream-width', type=int, default=320,
                     help='The resolution to stream to the CameraServer.')
-parser.add_argument('--stream-compression', type=int, default=25,
+parser.add_argument('--stream-compression', type=int, default=20,
                     help='The compression to stream for clients that do not specify it.')
 parser.add_argument('--record-folder', default=".",
                     help='Folder where recorded video is stored.')
-parser.add_argument('--record-height', type=int, default=320,
+parser.add_argument('--record-height', type=int, default=360,
                     help='The resolution to record frames.')
 parser.add_argument('--record-width', type=int, default=640,
                     help='The resolution to record frames.')
@@ -127,7 +128,7 @@ while True:
         if (recordInterval < 1): recordInterval = 1
         if recordFrameNum % recordInterval == 0:
             if recordVideo is None:
-                recordVideo = jetson.utils.videoOutput(f"{args.record_folder}/output-{time.time()}.mp4", argv=["--headless"])
+                recordVideo = jetson.utils.videoOutput(f"{args.record_folder}/frc-capture-{datetime.datetime.now():%Y-%m-%d-%H%M%S}.mp4", argv=["--headless"])
             if recordImg is None:
                 recordImg = jetson.utils.cudaAllocMapped(width=args.record_width, height=args.record_height, format=img.format)
             jetson.utils.cudaResize(img, recordImg)

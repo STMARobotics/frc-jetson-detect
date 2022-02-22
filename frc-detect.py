@@ -37,15 +37,15 @@ parser.add_argument('--capture-height', type=int, default=720,
                     help='The resolution height to capture images from the camera. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')
 parser.add_argument('--capture-width', type=int, default=1280,
                     help='The resolution width to capture images from the camera.')
-parser.add_argument('--stream-height', type=int, default=320,
+parser.add_argument('--stream-height', type=int, default=160,
                     help='The resolution to stream to the CameraServer.')
-parser.add_argument('--stream-width', type=int, default=640,
+parser.add_argument('--stream-width', type=int, default=320,
                     help='The resolution to stream to the CameraServer.')
 parser.add_argument('--stream-compression', type=int, default=25,
                     help='The compression to stream for clients that do not specify it.')
 parser.add_argument('--record-folder', default=".",
                     help='Folder where recorded video is stored.')
-parser.add_argument('--record-height', type=int, default=360,
+parser.add_argument('--record-height', type=int, default=320,
                     help='The resolution to record frames.')
 parser.add_argument('--record-width', type=int, default=640,
                     help='The resolution to record frames.')

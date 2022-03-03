@@ -5,6 +5,7 @@ import argparse
 import cscore
 from cscore import CameraServer
 from networktables import NetworkTables
+import numpy
 
 parser = argparse.ArgumentParser(description='FRC Object Detection')
 # Common arguments
@@ -26,6 +27,8 @@ parser.add_argument('--stream-width', type=int, default=320,
                     help='The resolution to stream to the CameraServer.')
 parser.add_argument('--stream-compression', type=int, default=20,
                     help='The compression to stream for clients that do not specify it.')
+parser.add_argument("--port", "-p", type=int, default=1182,
+                    help="CameraServer port")
 
 args = parser.parse_args()
 print(args)
@@ -33,9 +36,30 @@ print(args)
 # Configure the CameraServer to send images to the Driver Station
 cs = CameraServer.getInstance()
 cs.enableLogging()
-csSource = cscore.CvSource("Driver", cscore.VideoMode.PixelFormat.kMJPEG, args.stream_width, args.stream_height, 24)
-server = cs.startAutomaticCapture(camera=csSource, return_server=True)
+
+usbCam0 = cscore.UsbCamera("Test", "/dev/video2")
+usbCam0.setResolution(320, 180)
+usbCam0.setFPS(20)
+usbCam0.setPixelFormat(cscore.VideoMode.PixelFormat.kMJPEG)
+usbCam0.setConnectionStrategy(cscore.VideoSource.ConnectionStrategy.kKeepOpen)
+
+
+usbCam1 = cscore.UsbCamera("Test2", "/dev/video4")
+usbCam1.setPixelFormat(cscore.VideoMode.PixelFormat.kMJPEG)
+usbCam1.setResolution(320, 180)
+usbCam1.setFPS(20)
+usbCam1.setConnectionStrategy(cscore.VideoSource.ConnectionStrategy.kKeepOpen)
+
+server = cs.addServer(name="Driver", port=args.port)
+# server = cs.addSwitchedCamera("Driver")
+server.setSource(usbCam0)
+
+csSource = cscore.CvSource("Drivers", cscore.VideoMode.PixelFormat.kMJPEG, 320, 180, 30)
+# server = cs.startAutomaticCapture(camera=csSource, return_server=True)
+server.setSource(csSource)
 server.setCompression(args.stream_compression)
+server.setFPS(20)
+server.setResolution(args.stream_width, args.stream_height)
 
 # Configure the NetworkTables to send data to the robot and shuffleboard
 if args.ntip is None:
@@ -44,56 +68,16 @@ else:
     NetworkTables.initialize(args.ntip)
 
 driverCamTable = NetworkTables.getTable('DriverCam')
+driverCamTable.putNumber("CameraNum", 0)
 
-# Configure the camera
-camera = jetson.utils.videoSource(args.camera_url, argv=[
-    "--input-width=" + str(args.capture_width),
-    "--input-height=" + str(args.capture_height)])
-driverCamTable.putString("Camera FPS", camera.GetFrameRate())
+cvSource0 = cs.getVideo(camera=usbCam0)
+cvSource1 = cs.getVideo(camera=usbCam1)
 
-# Define variables to hold tranformed images for streaming
-smallImg = None
-bgrSmallImg = None
-
-startTime = time.time()
+image = numpy.zeros(shape=(180, 320, 3), dtype=numpy.uint8)
 while True:
-    if not csSource.isEnabled():
-        continue
-
-    # Capture image from the camera
-    img = camera.Capture()
-
-    # Stream to CameraServer, if anyone is watching
-    if csSource.isEnabled():
-        # Resize the image on the GPU to lower resolution for more efficient streaming
-        if smallImg is None:
-            smallImg = jetson.utils.cudaAllocMapped(width=args.stream_width, height=args.stream_height, format=img.format)
-        jetson.utils.cudaResize(img, smallImg)
-        del img
-
-        # Convert color from rgb8 to bgr8 - CUDA uses rgb but OpenCV/CameraServer use bgr
-        # Without this step, red and blue are inverted in the streamed image
-        if bgrSmallImg is None:
-            bgrSmallImg = jetson.utils.cudaAllocMapped(width=args.stream_width, height=args.stream_height, format="bgr8")
-        jetson.utils.cudaConvertColor(smallImg, bgrSmallImg)
-
-        # Synchronize so changes from GPU are available on CPU
-        jetson.utils.cudaDeviceSynchronize()
-
-        # Convert to from CUDA to Numpy/OpenGL 
-        # https://github.com/dusty-nv/jetson-inference/blob/master/docs/aux-image.md#converting-to-numpy-arrays
-        numpyImg = jetson.utils.cudaToNumpy(bgrSmallImg, args.stream_width, args.stream_height, 4)
-
-        # Send the image to the CameraServer
-        csSource.putFrame(numpyImg)
-        del numpyImg
-
-    # Calculate timing statistics
-    endTime = time.time()
-    elapseTime = (endTime - startTime) * 1000
-    startTime = endTime
-    driverCamTable.putNumber("Latency", elapseTime)
-    driverCamTable.putNumber("Pipeline FPS", 1000 / elapseTime)
-
-del smallImg
-del bgrSmallImg
+    if driverCamTable.getNumber("CameraNum", 0) == 0:
+        cvSource0.grabFrame(image)
+    else:
+        cvSource1.grabFrame(image)
+        
+    csSource.putFrame(image)

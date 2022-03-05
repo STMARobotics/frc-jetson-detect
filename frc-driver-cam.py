@@ -11,9 +11,9 @@ parser.add_argument('--team', '-t', type=int, default=7028,
 # Less common arguments
 parser.add_argument('--ntip', '-ip',
                     help='IP Address of the NetworkTables to connect to. Leave blank to connect to robot.')
-parser.add_argument('--front-camera', '-cf', default="/dev/video3",
+parser.add_argument('--front-camera', '-cf', default="/dev/v4l/by-path/platform-70090000.xusb-usb-0:3.2:1.0-video-index0",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
-parser.add_argument('--rear-camera', '-cr', default="/dev/video1",
+parser.add_argument('--rear-camera', '-cr', default="/dev/v4l/by-path/platform-70090000.xusb-usb-0:3.1:1.0-video-index0",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
 parser.add_argument('--height', type=int, default=180,
                     help='The resolution height to capture images from the cameras. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')

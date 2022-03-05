@@ -50,6 +50,8 @@ parser.add_argument('--record-height', type=int, default=360,
                     help='The resolution to record frames.')
 parser.add_argument('--record-width', type=int, default=640,
                     help='The resolution to record frames.')
+parser.add_argument("--port", "-p", type=int, default=1181,
+                    help="MjpgServer port for streaming")
 
 args = parser.parse_args()
 print(args)
@@ -65,7 +67,8 @@ crosshairY = args.capture_height
 cs = CameraServer.getInstance()
 cs.enableLogging()
 csSource = cscore.CvSource("Jetson", cscore.VideoMode.PixelFormat.kMJPEG, args.stream_width, args.stream_height, 24)
-server = cs.startAutomaticCapture(camera=csSource, return_server=True)
+server = cs.addServer(name="Jetson", port=args.port)
+server.setSource(csSource)
 server.setCompression(args.stream_compression)
 
 # Configure the NetworkTables to send data to the robot and shuffleboard

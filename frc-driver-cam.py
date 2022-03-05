@@ -1,11 +1,7 @@
-import jetson.inference
-import jetson.utils
-import time
 import argparse
 import cscore
-from cscore import CameraServer
+import time
 from networktables import NetworkTables
-import numpy
 
 parser = argparse.ArgumentParser(description='FRC Object Detection')
 # Common arguments
@@ -15,9 +11,9 @@ parser.add_argument('--team', '-t', type=int, default=7028,
 # Less common arguments
 parser.add_argument('--ntip', '-ip',
                     help='IP Address of the NetworkTables to connect to. Leave blank to connect to robot.')
-parser.add_argument('--camera0-url', '-c0', default="/dev/video0",
+parser.add_argument('--front-camera', '-cf', default="/dev/video0",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
-parser.add_argument('--camera1-url', '-c1', default="/dev/video2",
+parser.add_argument('--rear-camera', '-cr', default="/dev/video2",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
 parser.add_argument('--height', type=int, default=180,
                     help='The resolution height to capture images from the cameras. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')
@@ -28,35 +24,24 @@ parser.add_argument('--rate', type=int, default=20,
 parser.add_argument('--stream-compression', type=int, default=20,
                     help='The compression to stream for clients that do not specify it.')
 parser.add_argument("--port", "-p", type=int, default=1182,
-                    help="CameraServer port")
+                    help="MjpgServer port for streaming")
 
 args = parser.parse_args()
 print(args)
 
-# Configure the CameraServer to send images to the Driver Station
-cs = CameraServer.getInstance()
-cs.enableLogging()
+frontCam = cscore.UsbCamera("DriverCam0", args.front_camera)
+frontCam.setPixelFormat(cscore.VideoMode.PixelFormat.kMJPEG)
+frontCam.setResolution(args.width, args.height)
+frontCam.setFPS(args.rate)
+frontCam.setConnectionStrategy(cscore.VideoSource.ConnectionStrategy.kKeepOpen)
 
-usbCam0 = cscore.UsbCamera("DriverCam0", args.camera0_url)
-usbCam0.setResolution(args.width, args.height)
-usbCam0.setFPS(args.rate)
-usbCam0.setPixelFormat(cscore.VideoMode.PixelFormat.kMJPEG)
-usbCam0.setConnectionStrategy(cscore.VideoSource.ConnectionStrategy.kKeepOpen)
+rearCam = cscore.UsbCamera("DriverCam1", args.rear_camera)
+rearCam.setPixelFormat(cscore.VideoMode.PixelFormat.kMJPEG)
+rearCam.setResolution(args.width, args.height)
+rearCam.setFPS(args.rate)
+rearCam.setConnectionStrategy(cscore.VideoSource.ConnectionStrategy.kKeepOpen)
 
-
-usbCam1 = cscore.UsbCamera("DriverCam1", args.camera1_url)
-usbCam1.setPixelFormat(cscore.VideoMode.PixelFormat.kMJPEG)
-usbCam1.setResolution(args.width, args.height)
-usbCam1.setFPS(args.rate)
-usbCam1.setConnectionStrategy(cscore.VideoSource.ConnectionStrategy.kKeepOpen)
-
-server = cs.addServer(name="DriverCombined", port=args.port)
-# server = cs.addSwitchedCamera("Driver")
-server.setSource(usbCam0)
-
-csSource = cscore.CvSource("DriverCombined", cscore.VideoMode.PixelFormat.kMJPEG, args.width, args.height, args.rate)
-# server = cs.startAutomaticCapture(camera=csSource, return_server=True)
-server.setSource(csSource)
+server = cscore.MjpegServer(name="Driver", port=args.port)
 server.setCompression(args.stream_compression)
 server.setFPS(args.rate)
 server.setResolution(args.width, args.height)
@@ -67,17 +52,22 @@ if args.ntip is None:
 else:
     NetworkTables.initialize(args.ntip)
 
+# Publish the stream to the CameraPublisher table so it can be added to shuffleboard
+streamAddresses = []
+for addr in cscore.getNetworkInterfaces():
+    if addr == "127.0.0.1":
+        continue  # ignore localhost
+    streamAddresses.append("mjpg:http://%s:%d/?action=stream" % (addr, args.port))
+NetworkTables.getTable("CameraPublisher").getSubTable("Driver").putStringArray("streams", streamAddresses)
+
+# Set up the entry that is used to select front or rear camera
 driverCamTable = NetworkTables.getTable('DriverCam')
-driverCamTable.putNumber("CameraNum", 0)
+driverCamTable.putBoolean("Front", driverCamTable.getBoolean("Front", True))
 
-cvSource0 = cs.getVideo(camera=usbCam0)
-cvSource1 = cs.getVideo(camera=usbCam1)
-
-image = numpy.zeros(shape=(args.height, args.width, 3), dtype=numpy.uint8)
+# Loop forever switching the source to front or back
 while True:
-    if driverCamTable.getNumber("CameraNum", 0) == 0:
-        cvSource0.grabFrame(image)
+    if driverCamTable.getBoolean("Front", True):
+        server.setSource(frontCam)
     else:
-        cvSource1.grabFrame(image)
-        
-    csSource.putFrame(image)
+        server.setSource(rearCam)
+    time.sleep(.02)

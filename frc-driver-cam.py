@@ -11,9 +11,9 @@ parser.add_argument('--team', '-t', type=int, default=7028,
 # Less common arguments
 parser.add_argument('--ntip', '-ip',
                     help='IP Address of the NetworkTables to connect to. Leave blank to connect to robot.')
-parser.add_argument('--front-camera', '-cf', default="/dev/video0",
+parser.add_argument('--front-camera', '-cf', default="/dev/video3",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
-parser.add_argument('--rear-camera', '-cr', default="/dev/video2",
+parser.add_argument('--rear-camera', '-cr', default="/dev/video1",
                     help='The camera to use for detection. Use `v4l2-ctl --list-devices` to get list of USB cameras')
 parser.add_argument('--height', type=int, default=180,
                     help='The resolution height to capture images from the cameras. Use `v4l2-ctl --device=/dev/video1 --list-formats-ext` to get modes')
@@ -23,7 +23,7 @@ parser.add_argument('--rate', type=int, default=20,
                     help="The framerate (FPS) to capture from the cameras.")
 parser.add_argument('--stream-compression', type=int, default=20,
                     help='The compression to stream for clients that do not specify it.')
-parser.add_argument("--port", "-p", type=int, default=1182,
+parser.add_argument("--port", "-p", type=int, default=1181,
                     help="MjpgServer port for streaming")
 
 args = parser.parse_args()
@@ -52,22 +52,25 @@ if args.ntip is None:
 else:
     NetworkTables.initialize(args.ntip)
 
-# Publish the stream to the CameraPublisher table so it can be added to shuffleboard
-streamAddresses = []
-for addr in cscore.getNetworkInterfaces():
-    if addr == "127.0.0.1":
-        continue  # ignore localhost
-    streamAddresses.append("mjpg:http://%s:%d/?action=stream" % (addr, args.port))
-NetworkTables.getTable("CameraPublisher").getSubTable("Driver").putStringArray("streams", streamAddresses)
 
 # Set up the entry that is used to select front or rear camera
 driverCamTable = NetworkTables.getTable('DriverCam')
 driverCamTable.putBoolean("Front", driverCamTable.getBoolean("Front", True))
 
 # Loop forever switching the source to front or back
+startTime = time.time()
 while True:
     if driverCamTable.getBoolean("Front", True):
         server.setSource(frontCam)
     else:
         server.setSource(rearCam)
-    time.sleep(.02)
+
+    # Republish the camera every 5 seconds in case the IP changes
+    if ((time.time() - startTime) % 5):
+        # Publish the stream to the CameraPublisher table so it can be added to shuffleboard
+        streamAddresses = []
+        for addr in cscore.getNetworkInterfaces():
+            if addr == "127.0.0.1":
+                continue  # ignore localhost
+            streamAddresses.append("mjpg:http://%s:%d/?action=stream" % (addr, args.port))
+        NetworkTables.getTable("CameraPublisher").getSubTable("Driver").putStringArray("streams", streamAddresses)

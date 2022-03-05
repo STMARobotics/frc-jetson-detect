@@ -50,7 +50,7 @@ parser.add_argument('--record-height', type=int, default=360,
                     help='The resolution to record frames.')
 parser.add_argument('--record-width', type=int, default=640,
                     help='The resolution to record frames.')
-parser.add_argument("--port", "-p", type=int, default=1181,
+parser.add_argument("--port", "-p", type=int, default=1182,
                     help="MjpgServer port for streaming")
 
 args = parser.parse_args()

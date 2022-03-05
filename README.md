@@ -101,6 +101,29 @@ NOTE: This command requires v4l-utils. If it is not installed, run this command:
 sudo apt install v4l-utils
 ```
 
+### Pick the right camera
+If there are multiple cameras you will need to do additional work to find a way to identify them between boots. FRC's cscore supports this, jetson-inference appears to only
+support device IDs like /dev/video0.
+
+Run this to get camera alternate paths
+```
+sudo udevadm info --query=all --name=/dev/video3
+```
+
+My best guess is that you can address the cameras by port:
+```
+/dev/v4l/by-path/platform-70090000.xusb-usb-0:2:1.0-video-index0
+                                              ^
+                                              port
+```                                              
+On the Jetson, the USB 3.0 port appears to be port `2`. The bottom USB 2.0 port appears to be port `3.1` and the top USB 2.0 port appears to be port `3.2`.
+
+
+Our H.264 cameras identify as two devices: video-index0 appears to be MJPEG/YUYV whereas video-index1 appears to be H.264.
+
+Our H.264 cameras don't seem to be distinguishable, there is no serial number, etc. However, the HD camera seems to consistently have this ID, regardless of port:
+v4l/by-id/usb-HD_USB_Camera_HD_USB_Camera-video-index0
+
 ### Scheduling at startup
 Schedule this project to run on startup with systemd.
 

@@ -134,7 +134,13 @@ accept a variety of camera IDs, so you can probably choose any of them from `ude
 Unfortunately, the `frc-detect.py` script does not. You can use bash commands to locate the camera when you
 execute the script. For example, this command will find the camera on usb port 2.1:
 ```
-python3 frc-detect.py -c `v4l2-ctl --list-devices | grep -A 1 usb-2.1 | grep video
+python3 frc-detect.py -c `v4l2-ctl --list-devices | grep -A 1 usb-2.1 | grep video`
+```
+
+There are a number of solutions to use this in the systemd service (see below), but a simple option is to use bash.
+The ExecStart entry would be something like this:
+```
+ExecStart=/bin/bash -c "/usr/bin/python3 /home/robotics/frc-jetson-detect/frc-detect.py -c `v4l2-ctl --list-devices | grep -A 1 'usb-2.1' | grep video`"
 ```
 
 ### Scheduling at startup

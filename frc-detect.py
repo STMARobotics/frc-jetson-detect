@@ -59,6 +59,9 @@ print(args)
 # Scale of current capture settings vs the baseline of 720p (used to scale things we draw on the image)
 captureScale = args.capture_height / 720
 
+# Total area of the capture image, used to calculate area for threshold
+captureArea = args.capture_height * args.capture_width
+
 # Crosshair location. This is the "origin" for targets - the location where we want targets to be.
 crosshairX = args.capture_width // 2
 crosshairY = args.capture_height
@@ -143,17 +146,21 @@ while True:
         recordImg = None
         recordFrameNum = -1
 
-    # Detect objects from the image. Have DetectNet overlay confidence on image.
-    detections = detectNet.Detect(img, overlay='conf')
+    # Detect objects from the image
+    detections = detectNet.Detect(img, overlay='none')
 
     cargoColor = jetsonTable.getString("CargoColor", "Both")
+    areaThreshold = jetsonTable.getNumber("AreaThreshold", 30)
     closestDetection = None
     closestDetectionDistance = 10000
     # Loop over detected objects
     ntDetections = []
     for detection in detections:
+        # Filter objects that are larger than the area threshold
+        isSmallEnough = areaPercent = ((detection.Area / captureArea) * 100) <= areaThreshold
         # Filter based on selected color - RedCargo, BlueCargo, or Both
-        if labels[detection.ClassID] == cargoColor or cargoColor == "Both":
+        isColorToKeep = labels[detection.ClassID] == cargoColor or cargoColor == "Both"
+        if isColorToKeep and isSmallEnough:
             # Calculate the target's distance from the crosshairs
             targetX = detection.Center[0] - crosshairX
             targetY = crosshairY - detection.Center[1]
@@ -177,7 +184,8 @@ while True:
                 "Timestamp": time.time(),
                 "TargetX": targetX,
                 "TargetY": targetY,
-                "TargetDistance": targetDistance
+                "TargetDistance": targetDistance,
+                "AreaPercent": areaPercent
             }
             ntDetections.append(ntDetection)
             

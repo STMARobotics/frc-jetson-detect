@@ -57,20 +57,20 @@ else:
 driverCamTable = NetworkTables.getTable('DriverCam')
 driverCamTable.putBoolean("Front", driverCamTable.getBoolean("Front", True))
 
+# Publish the stream to the CameraPublisher networktable so it can be added to shuffleboard
+streamAddresses = []
+# Always publish the known static address
+streamAddresses.append("mjpg:http://%s:%d/?action=stream" % ("10.70.28.13", args.port))
+# Publish any other interface addresses cscore can find
+for addr in cscore.getNetworkInterfaces():
+    if addr == "127.0.0.1" or addr == "10.70.28.13":
+        continue  # ignore localhost
+    streamAddresses.append("mjpg:http://%s:%d/?action=stream" % (addr, args.port))
+NetworkTables.getTable("CameraPublisher").getSubTable("Driver").putStringArray("streams", streamAddresses)
+
 # Loop forever switching the source to front or back
-startTime = time.time()
 while True:
     if driverCamTable.getBoolean("Front", True):
         server.setSource(frontCam)
     else:
         server.setSource(rearCam)
-
-    # Republish the camera every 5 seconds in case the IP changes
-    if ((time.time() - startTime) % 5):
-        # Publish the stream to the CameraPublisher table so it can be added to shuffleboard
-        streamAddresses = []
-        for addr in cscore.getNetworkInterfaces():
-            if addr == "127.0.0.1":
-                continue  # ignore localhost
-            streamAddresses.append("mjpg:http://%s:%d/?action=stream" % (addr, args.port))
-        NetworkTables.getTable("CameraPublisher").getSubTable("Driver").putStringArray("streams", streamAddresses)

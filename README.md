@@ -51,27 +51,23 @@ Integration with an FRC robot uses [RobotPy](https://robotpy.readthedocs.io/en/s
 ## Setup
 Install pip
 ```
-wget -4 https://bootstrap.pypa.io/pip/3.6/get-pip.py
-python3 get-pip.py
-rm get-pip.py
+sudo apt update
+sudo apt install python3-pip
 ```
 
-Add to pip `~/.bashrc` by adding this line to the end of the file
+Install pynetworktables. Unfortunately, WPILib 2023 requires Ubunty 22.04, but Jetson runs 18.04. You must use older
+python libraries. `pynetworktables` is still compatible, the newer `pyntcore` is not.
+[See docs for details](https://robotpy.readthedocs.io/en/stable/install/pynetworktables.html#install-via-pip-on-macos-linux)
 ```
-export PATH=$PATH:/home/robotics/.local/bin
-```
-
-Install pynetworktables. [See docs for details](https://robotpy.readthedocs.io/en/stable/install/pynetworktables.html#install-via-pip-on-macos-linux)
-```
-pip install pynetworktables
+python3 -m pip install pynetworktables
 ```
 
 
 Install cscore.
-Warning: If you follow the docs to install with `apt` you may get an old version. Using pip will build from source, so it takes a few minutes, but you'll get the latest version.
+Warning: If you follow the docs to install with `apt` you may get an old version. Using pip will build from source, so it takes a few minutes, but you'll get the correct version. 2023+ requires Ubuntu 22.04, so use version 2022.0.3.
 ```
 export CPPFLAGS=-I/usr/include/opencv4
-pip install robotpy-cscore
+python3 -m pip install robotpy-cscore===2022.0.3
 ```
 
 # NetworkTables
